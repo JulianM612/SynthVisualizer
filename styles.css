@@ -6,6 +6,8 @@ body {
     overflow: hidden;
 }
 
+/* This main rule is not used with the current HTML structure */
+/*
 main {
     display: flex;
     flex-direction: column;
@@ -14,44 +16,85 @@ main {
     padding: 2rem;
     box-sizing: border-box;
 }
+*/
 
-#controls {
-    position: fixed;
-    top: 2rem;
-    left: 2rem;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 1rem;
-    border-radius: 8px;
-}
-
-#controls label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-}
-
-#controls input[type="file"] {
-    background: #333;
-    padding: 0.5rem;
-    border-radius: 4px;
-    border: 1px solid #555;
-    color: #fff;
-}
+/* Removed #controls as its content is merged into .audio-controls */
 
 #info {
     position: fixed;
-    bottom: 2rem;
+    bottom: 1rem; /* Adjusted position */
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.7);
     padding: 0.5rem 1rem;
     border-radius: 20px;
     font-size: 0.9rem;
+    z-index: 10;
 }
 
 #main-canvas {
     width: 100vw;
     height: 100vh;
     display: block;
+}
+
+/* Generic canvas styling, ensure it doesn't conflict with stats.js if it adds its own canvas outside #main-canvas */
+canvas {
+    display: block;
+}
+
+.audio-controls {
+    position: fixed;
+    top: 1rem; /* Moved to top for better visibility with dat.gui typically on top-right */
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 20, 0.8); /* Slightly less transparent */
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    display: flex;
+    gap: 15px; /* Increased gap */
+    align-items: center;
+    z-index: 100; /* Ensure it's above stats.js and other elements */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.audio-controls label {
+    font-size: 0.9rem;
+    margin-right: -5px; /* Pull input closer to label */
+}
+
+.audio-controls input[type="file"] {
+    background: #333;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #555;
+    color: #fff;
+    font-size: 0.8rem; /* Smaller font for file input */
+    max-width: 150px; /* Limit width of file input */
+}
+
+.audio-controls button {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    border: none;
+    background: #007bff; /* Brighter color */
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+}
+
+.audio-controls button:hover {
+    background: #0056b3;
+}
+
+.audio-controls input[type="range"] {
+    width: 100px;
+    cursor: pointer;
+}
+
+/* dat.gui typically positions itself. If you need to style it: */
+.dg.main {
+    top: 1rem;
+    right: 1rem;
 }

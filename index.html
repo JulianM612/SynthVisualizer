@@ -3,29 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synesthesia Machine</title>
+    <title>Synth Visualizer</title>
     <link rel="stylesheet" href="styles.css">
+
+            <!-- START IMPORT MAP -->
     <script type="importmap">
     {
         "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-            "dat.gui": "https://unpkg.com/dat.gui@0.7.9/build/dat.gui.module.js"
+            "three": "./node_modules/three/build/three.module.js",
+            "three/addons/": "./node_modules/three/examples/jsm/",
+            "dat.gui": "./node_modules/dat.gui/build/dat.gui.module.js",
+            "stats.js": "./node_modules/stats.js/src/Stats.js"
         }
     }
     </script>
+    <!-- END IMPORT MAP -->
 </head>
 <body>
-    <main>
-        <section id="controls">
-            <label for="audioFile">Upload Audio (MP3/WAV):</label>
-            <input type="file" id="audioFile" accept="audio/mpeg, audio/wav">
-        </section>
-        <section id="info">
-            Upload an audio file to begin.
-        </section>
-        <canvas id="main-canvas"></canvas>
-    </main>
-    <script type="module" src="src/main.js"></script>
+    <canvas id="main-canvas"></canvas>
+    <div class="audio-controls">
+        <label for="audioFile">Load Audio:</label>
+        <input type="file" id="audioFile" accept="audio/*">
+        <button id="play-pause-button">Play</button>
+        <label for="volume-slider">Volume:</label>
+        <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    <div id="info">Loading visualizer...</div>
+    <script type="module" src="src/main.js"></script> {/* <-- THIS IS THE IMPORTANT LINE */}
 </body>
 </html>
