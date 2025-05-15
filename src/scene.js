@@ -26,6 +26,7 @@ export class Visualizer {
     }
 
     setupStats() {
+        // ... (unchanged) ...
         console.log("Visualizer: setupStats");
         this.stats = new Stats();
         if (!document.body.contains(this.stats.dom)) {
@@ -36,32 +37,19 @@ export class Visualizer {
     setupSettingsAndGUI() {
         console.log("Visualizer: setupSettingsAndGUI");
         this.settings = {
-            // Existing Particle Settings
             particleCount: 6000,
             particleSize: 0.8,
             rotationSpeed: 0.1,
-            
-            // Existing Sphere Settings (some will be repurposed or augmented)
             sphereRotationSpeed: 0.15,
-            
-            // --- NEW SPHERE SETTINGS ---
-            sphereDetail: 15,                  // Initial detail for sphere geometry
-            noiseTimeScale: 0.1,             // How fast the noise pattern animates (will be used in shader)
-            baseDisplacementAmount: 0.15,      // Base amount of noise displacement (will be used in shader)
-            audioDisplacementScale: 0.4,     // How much audio scales the base displacement (will be used in shader)
-            
-            // Sphere Color Settings (for new shader)
-            colorA_R: 0.0, colorA_G: 0.2, colorA_B: 1.0, // Start of gradient (Blue)
-            colorB_R: 0.8, colorB_G: 0.0, colorB_B: 0.8, // End of gradient (Purple/Magenta)
-            colorBrightnessScale: 1.0,       // Base brightness of the sphere (for new shader)
-            audioColorBrightnessScale: 1.5,  // How much audio boosts brightness (for new shader)
-            // --- END NEW SPHERE SETTINGS ---
-
-            // Existing Bloom Settings
-            bloomStrength: 0.8,       
-            bloomRadius: 0.7,         
-            bloomThreshold: 0.8,      
-            audioBloomFactor: 1.2     
+            bloomStrength: 0.8,     
+            bloomRadius: 0.7,        
+            bloomThreshold: 0.8,     
+            audioBloomFactor: 1.2,
+            sphereNoiseStrength: 0.15,
+            sphereNoiseSpeed: 0.3,
+            // New Particle Lifespan Settings
+            particleMinLife: 2.0, // Min lifespan in seconds
+            particleMaxLife: 5.0  // Max lifespan in seconds
         };
 
         if (this.gui) {
@@ -74,35 +62,25 @@ export class Visualizer {
         particleFolder.add(this.settings, 'particleCount', 1000, 50000, 1000).name('Count').onChange(() => this.recreateParticles());
         particleFolder.add(this.settings, 'particleSize', 0.1, 5).name('Global Scale');
         particleFolder.add(this.settings, 'rotationSpeed', 0, 1).name('System Speed');
+        particleFolder.add(this.settings, 'particleMinLife', 0.5, 10.0).name('Min Lifespan (s)');
+        particleFolder.add(this.settings, 'particleMaxLife', 1.0, 20.0).name('Max Lifespan (s)');
+        // particleFolder.open(); // Open particle folder by default to see new settings
 
-        const sphereFolder = this.gui.addFolder('Sphere Visuals'); // Renamed for clarity
-        sphereFolder.add(this.settings, 'sphereRotationSpeed', 0, 0.5, 0.01).name('Rotation Speed');
-        sphereFolder.add(this.settings, 'sphereDetail', 5, 30, 1).name('Detail').onChange(() => this.recreateSphere());
-        sphereFolder.add(this.settings, 'noiseTimeScale', 0.0, 1.0, 0.01).name('Noise Anim Speed');
-        sphereFolder.add(this.settings, 'baseDisplacementAmount', 0.0, 0.5, 0.01).name('Base Displacement');
-        sphereFolder.add(this.settings, 'audioDisplacementScale', 0.0, 1.0, 0.01).name('Audio Disp. Scale');
-        sphereFolder.open(); // Open this by default to see new controls
-
-        const sphereColorFolder = sphereFolder.addFolder('Colors');
-        sphereColorFolder.add(this.settings, 'colorA_R', 0, 1, 0.01).name('Color A Red');
-        sphereColorFolder.add(this.settings, 'colorA_G', 0, 1, 0.01).name('Color A Green');
-        sphereColorFolder.add(this.settings, 'colorA_B', 0, 1, 0.01).name('Color A Blue');
-        sphereColorFolder.add(this.settings, 'colorB_R', 0, 1, 0.01).name('Color B Red');
-        sphereColorFolder.add(this.settings, 'colorB_G', 0, 1, 0.01).name('Color B Green');
-        sphereColorFolder.add(this.settings, 'colorB_B', 0, 1, 0.01).name('Color B Blue');
-        sphereColorFolder.add(this.settings, 'colorBrightnessScale', 0.1, 3.0, 0.05).name('Base Brightness');
-        sphereColorFolder.add(this.settings, 'audioColorBrightnessScale', 0.0, 5.0, 0.05).name('Audio Brightness');
-        // sphereColorFolder.open();
+        const sphereFolder = this.gui.addFolder('Sphere');
+        sphereFolder.add(this.settings, 'sphereRotationSpeed', 0, 1).name('Rotation Speed');
+        sphereFolder.add(this.settings, 'sphereNoiseStrength', 0, 0.5, 0.01).name('Noise Strength');
+        sphereFolder.add(this.settings, 'sphereNoiseSpeed', 0, 1, 0.01).name('Noise Speed');     
 
         const bloomFolder = this.gui.addFolder('Bloom');
         bloomFolder.add(this.settings, 'bloomStrength', 0, 5).name('Base Strength');
         bloomFolder.add(this.settings, 'bloomRadius', 0, 2).name('Radius');
-        bloomFolder.add(this.settings, 'bloomThreshold', 0, 1, 0.01).name('Threshold');
+        bloomFolder.add(this.settings, 'bloomThreshold', 0, 1).name('Threshold');
         bloomFolder.add(this.settings, 'audioBloomFactor', 0, 5).name('Audio Boost');
         bloomFolder.open();
     }
 
     setupRendererAndScene() {
+        // ... (unchanged) ...
         console.log("Visualizer: setupRendererAndScene");
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
@@ -115,11 +93,10 @@ export class Visualizer {
 
         this.scene = new THREE.Scene();
 
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.z = 8;
+        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000); 
+        this.camera.position.z = 8; 
         this.camera.lookAt(this.scene.position);
         console.log("Camera position:", this.camera.position.toArray().join(', '));
-
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
@@ -129,11 +106,11 @@ export class Visualizer {
     }
 
     createSceneObjects() {
+        // ... (Sphere setup unchanged from previous version with noise) ...
         console.log("Visualizer: createSceneObjects");
-        // Use initial sphereDetail setting for geometry
-        const sphereGeometry = new THREE.IcosahedronGeometry(1.5, Math.floor(this.settings.sphereDetail)); 
+        const sphereGeometry = new THREE.IcosahedronGeometry(1.5, 15);
         this.sphereMaterial = new THREE.ShaderMaterial({
-            uniforms: { // Existing uniforms + new ones
+            uniforms: {
                 time: { value: 0 },
                 bass: { value: 0 },
                 lowMid: { value: 0 },
@@ -141,43 +118,54 @@ export class Visualizer {
                 highMid: { value: 0 },
                 treble: { value: 0 },
                 volume: { value: 0 },
-
-                // New uniforms to be used by the overhauled shaders
-                noiseTimeScale: { value: this.settings.noiseTimeScale },
-                baseDisplacementAmount: { value: this.settings.baseDisplacementAmount },
-                audioDisplacementScale: { value: this.settings.audioDisplacementScale },
-                
-                colorA: { value: new THREE.Color(this.settings.colorA_R, this.settings.colorA_G, this.settings.colorA_B) },
-                colorB: { value: new THREE.Color(this.settings.colorB_R, this.settings.colorB_G, this.settings.colorB_B) },
-                colorBrightnessScale: { value: this.settings.colorBrightnessScale },
-                audioColorBrightnessScale: { value: this.settings.audioColorBrightnessScale },
+                sphereNoiseStrength: { value: this.settings.sphereNoiseStrength },
+                sphereNoiseSpeed: { value: this.settings.sphereNoiseSpeed }
             },
-            // Shaders will be replaced in the next step; for now, keep the previous working ones
             vertexShader: `
                 varying vec3 vWorldPosition;
                 varying vec3 vViewPosition;
                 varying vec3 vViewNormal;
-                
+                varying float vNoise;
+
                 uniform float bass;
                 uniform float mid; 
+                uniform float treble;
                 uniform float time;
+                uniform float sphereNoiseStrength;
+                uniform float sphereNoiseSpeed;
 
-                // These new uniforms won't be used by *this* old shader yet
-                uniform float noiseTimeScale; 
-                uniform float baseDisplacementAmount;
-                uniform float audioDisplacementScale;
+                float rand(vec2 n) { 
+                    return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+                }
 
+                float fbm(vec3 p) {
+                    float value = 0.0;
+                    float amplitude = 0.5;
+                    float frequency = 2.0; 
+                    for (int i = 0; i < 4; i++) { 
+                        value += amplitude * rand(p.xy * frequency + time * sphereNoiseSpeed * 0.5); 
+                        p.xy += vec2(10.0); 
+                        amplitude *= 0.5; 
+                        frequency *= 2.0; 
+                    }
+                    return value;
+                }
 
                 void main() {
                     vWorldPosition = position;
-                    
-                    float displacement = bass * 0.5 * sin(position.y * 10.0 + time * 2.5 + position.x * 5.0);
-                    displacement += mid * 0.2 * cos(position.x * 8.0 - time * 1.5 + position.z * 6.0);
-                    vec3 newPosition = position + normal * displacement;
+                    vNoise = fbm(position * 2.0); 
+
+                    float audioDisplacement = bass * 0.45 * sin(position.y * 10.0 + time * 2.5 + position.x * 5.0);
+                    audioDisplacement += mid * 0.25 * cos(position.x * 8.0 - time * 1.5 + position.z * 6.0);
+                    audioDisplacement += treble * 0.15 * sin(position.z * 12.0 + time * 1.8 + position.y * 4.0);
+
+                    float noiseDisplacement = (vNoise - 0.25) * sphereNoiseStrength * (1.0 + bass * 0.5); 
+
+                    vec3 newPosition = position + normal * (audioDisplacement + noiseDisplacement);
                     
                     vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
                     vViewPosition = -mvPosition.xyz;
-                    vViewNormal = normalize(normalMatrix * normal);
+                    vViewNormal = normalize(normalMatrix * normal); 
                     
                     gl_Position = projectionMatrix * mvPosition;
                 }
@@ -186,20 +174,13 @@ export class Visualizer {
                 varying vec3 vWorldPosition;
                 varying vec3 vViewPosition;
                 varying vec3 vViewNormal;
+                varying float vNoise; 
 
                 uniform float bass;
-                uniform float lowMid; 
                 uniform float mid;
-                uniform float highMid; 
                 uniform float treble;
                 uniform float volume;
                 uniform float time;
-
-                // These new uniforms won't be used by *this* old shader yet
-                uniform vec3 colorA;
-                uniform vec3 colorB;
-                uniform float colorBrightnessScale;
-                uniform float audioColorBrightnessScale;
                 
                 float mySmoothstep(float edge0, float edge1, float x) {
                     float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
@@ -216,9 +197,10 @@ export class Visualizer {
                     vec3 audioColor = bassColorContribution + midColorContribution + trebleColorContribution;
 
                     vec3 color = baseColor + audioColor;
+                    color *= (0.8 + vNoise * 0.6); 
                     
                     float pulseStrength = (1.0 + sin(time * 5.0 + vWorldPosition.y * 4.0)) * 0.5; 
-                    pulseStrength *= (volume * volume * 0.6); 
+                    pulseStrength *= (volume * volume * 0.6 * (0.5 + vNoise)); 
 
                     color += vec3(0.25, 0.2, 0.15) * pulseStrength; 
                     
@@ -227,48 +209,25 @@ export class Visualizer {
 
                     color += vec3(0.5, 0.6, 0.7) * fresnelEffect * (0.15 + volume * 0.5); 
 
-                    color = clamp(color, 0.0, 1.2); 
+                    color = clamp(color, 0.0, 1.3); 
 
                     gl_FragColor = vec4(color, 1.0);
                 }
             `
         });
-
         this.sphere = new THREE.Mesh(sphereGeometry, this.sphereMaterial);
         this.scene.add(this.sphere);
-        this.sphere.updateMatrixWorld(true);
+        this.sphere.updateMatrixWorld(true); // Ensure matrix is up-to-date for logging
         const sphereWorldPos = new THREE.Vector3();
         this.sphere.getWorldPosition(sphereWorldPos);
         console.log("Sphere added to scene. Calculated world position:", sphereWorldPos.toArray().join(', '));
         console.log("Sphere visible:", this.sphere.visible);
 
-
-        this.createParticles();
+        this.createParticles(); // This will now set up particles with lifespan attributes
     }
-
-    recreateSphere() {
-        console.log("Visualizer: Recreating sphere due to detail change.");
-        if (this.sphere) {
-            this.scene.remove(this.sphere);
-            this.sphere.geometry.dispose(); // Dispose the old geometry
-            // Material is reused, its uniforms are updated in animateScene
-        }
-    
-        // Create new geometry with the updated detail
-        const newSphereGeometry = new THREE.IcosahedronGeometry(1.5, Math.floor(this.settings.sphereDetail));
-        
-        // If material definition itself depends on something like #defines based on detail,
-        // you might need to dispose and recreate this.sphereMaterial as well.
-        // For now, assuming material structure is constant.
-        this.sphere = new THREE.Mesh(newSphereGeometry, this.sphereMaterial);
-        this.scene.add(this.sphere);
-        console.log("Visualizer: Sphere recreated with detail:", this.settings.sphereDetail);
-    }
-
 
     createParticles() {
-        // ... (unchanged from previous full version) ...
-        console.log("Visualizer: createParticles (re)called");
+        console.log("Visualizer: createParticles (re)called with lifespan logic");
         if (this.particleSystem) {
             console.log("Visualizer: Disposing old particle system");
             this.scene.remove(this.particleSystem);
@@ -284,33 +243,26 @@ export class Visualizer {
         const positions = new Float32Array(this.settings.particleCount * 3);
         const colors = new Float32Array(this.settings.particleCount * 3);
         const baseSizes = new Float32Array(this.settings.particleCount); 
-        const randomFactors = new Float32Array(this.settings.particleCount); 
+        const randomFactors = new Float32Array(this.settings.particleCount);
+        // New attributes for lifespan
+        const life = new Float32Array(this.settings.particleCount);
+        const maxLife = new Float32Array(this.settings.particleCount);
 
         const particleOuterRadius = 15; 
         const particleInnerRadius = 2.5; 
 
         for (let i = 0; i < this.settings.particleCount; i++) {
             const i3 = i * 3;
-            const radius = particleInnerRadius + Math.random() * (particleOuterRadius - particleInnerRadius);
-            const theta = Math.random() * 2 * Math.PI;
-            const phi = Math.acos((Math.random() * 2) - 1); 
-
-            positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
-            positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-            positions[i3 + 2] = radius * Math.cos(phi);
-
-            colors[i3] = 0.6 + Math.random() * 0.4; 
-            colors[i3 + 1] = 0.6 + Math.random() * 0.4;
-            colors[i3 + 2] = 0.6 + Math.random() * 0.4;
-
-            baseSizes[i] = 0.5 + Math.random() * 1.0; 
-            randomFactors[i] = Math.random(); 
+            // Initial position (will be reset when particle "dies" and respawns)
+            this.resetParticle(i, positions, colors, baseSizes, randomFactors, life, maxLife);
         }
 
         particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         particles.setAttribute('baseSize', new THREE.BufferAttribute(baseSizes, 1)); 
         particles.setAttribute('randomFactor', new THREE.BufferAttribute(randomFactors, 1));
+        particles.setAttribute('life', new THREE.BufferAttribute(life, 1)); // Add life attribute
+        particles.setAttribute('maxLife', new THREE.BufferAttribute(maxLife, 1)); // Add maxLife attribute
 
 
         const particleMaterial = new THREE.ShaderMaterial({
@@ -325,9 +277,11 @@ export class Visualizer {
                 attribute float baseSize; 
                 attribute vec3 color;
                 attribute float randomFactor;
+                attribute float life;     // Receive life
+                attribute float maxLife;  // Receive maxLife
 
                 varying vec3 vColor;
-                varying float vAlphaRandom;
+                varying float vAlpha; // Will calculate alpha based on life
 
                 uniform float time;
                 uniform float globalParticleScale; 
@@ -336,7 +290,24 @@ export class Visualizer {
                 
                 void main() {
                     vColor = color;
-                    vAlphaRandom = 0.5 + randomFactor * 0.5; 
+
+                    // Calculate normalized age (0 = new, 1 = old)
+                    float normalizedAge = 1.0 - (life / maxLife); // Inverted: 0 at birth, 1 at death
+                    
+                    // Alpha: fade in quickly, stay, fade out
+                    // Example: fade in over first 20% of life, fade out over last 30%
+                    float fadeInDuration = 0.2;
+                    float fadeOutStartTime = 0.7;
+
+                    if (normalizedAge < fadeInDuration) {
+                        vAlpha = normalizedAge / fadeInDuration; // Ramp up
+                    } else if (normalizedAge > fadeOutStartTime) {
+                        vAlpha = 1.0 - ((normalizedAge - fadeOutStartTime) / (1.0 - fadeOutStartTime)); // Ramp down
+                    } else {
+                        vAlpha = 1.0; // Fully visible
+                    }
+                    vAlpha = clamp(vAlpha, 0.0, 1.0) * (0.5 + randomFactor * 0.5); // Apply random factor for variation
+
 
                     vec3 pos = position;
                     
@@ -349,11 +320,11 @@ export class Visualizer {
 
                     pos.y += sin(time * 0.2 + randomFactor * 10.0) * 0.3 * (1.0 + audioMid * 2.0);
 
-
                     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
                     
                     float audioSizeFactor = 1.0 + audioVolume * 0.8 + audioMid * 1.2; 
                     gl_PointSize = baseSize * globalParticleScale * audioSizeFactor * (100.0 / -mvPosition.z); 
+                    gl_PointSize *= vAlpha; // Make particles smaller as they fade (optional)
                     
                     gl_Position = projectionMatrix * mvPosition;
                 }
@@ -361,13 +332,12 @@ export class Visualizer {
             fragmentShader: `
                 uniform sampler2D pointTexture;
                 varying vec3 vColor;
-                varying float vAlphaRandom; 
+                varying float vAlpha; // Received from vertex shader
                 
                 void main() {
+                    if (vAlpha < 0.01) discard; // Discard fully transparent particles early
                     vec4 texColor = texture2D(pointTexture, gl_PointCoord);
-                    float alpha = texColor.a * vAlphaRandom; 
-                    if (alpha < 0.01) discard; 
-                    gl_FragColor = vec4(vColor * texColor.rgb, alpha);
+                    gl_FragColor = vec4(vColor * texColor.rgb, texColor.a * vAlpha);
                 }
             `,
             transparent: true,
@@ -377,8 +347,35 @@ export class Visualizer {
 
         this.particleSystem = new THREE.Points(particles, particleMaterial);
         this.scene.add(this.particleSystem);
-        console.log("Visualizer: New particle system created and added");
+        console.log("Visualizer: New particle system created and added with lifespan attributes.");
     }
+
+    // Helper function to initialize/reset a single particle
+    resetParticle(index, positions, colors, baseSizes, randomFactors, life, maxLife) {
+        const i3 = index * 3;
+        const particleOuterRadius = 15; 
+        const particleInnerRadius = 2.5; 
+
+        const radius = particleInnerRadius + Math.random() * (particleOuterRadius - particleInnerRadius);
+        const theta = Math.random() * 2 * Math.PI;
+        const phi = Math.acos((Math.random() * 2) - 1);
+
+        positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+        positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+        positions[i3 + 2] = radius * Math.cos(phi);
+
+        colors[i3] = 0.6 + Math.random() * 0.4; 
+        colors[i3 + 1] = 0.6 + Math.random() * 0.4;
+        colors[i3 + 2] = 0.6 + Math.random() * 0.4;
+
+        baseSizes[index] = 0.5 + Math.random() * 1.0; 
+        randomFactors[index] = Math.random(); 
+        
+        const lifeRange = this.settings.particleMaxLife - this.settings.particleMinLife;
+        maxLife[index] = this.settings.particleMinLife + Math.random() * lifeRange;
+        life[index] = maxLife[index]; // Start with full life
+    }
+
 
     generateParticleTexture() {
         // ... (unchanged) ...
@@ -432,31 +429,44 @@ export class Visualizer {
         this.stats.begin();
         this.controls.update(); 
 
-        // --- UPDATE NEW SPHERE UNIFORMS FROM GUI SETTINGS ---
-        if (this.sphereMaterial) { // Ensure material exists
-            this.sphereMaterial.uniforms.noiseTimeScale.value = this.settings.noiseTimeScale;
-            this.sphereMaterial.uniforms.baseDisplacementAmount.value = this.settings.baseDisplacementAmount;
-            this.sphereMaterial.uniforms.audioDisplacementScale.value = this.settings.audioDisplacementScale;
-            this.sphereMaterial.uniforms.colorA.value.setRGB(this.settings.colorA_R, this.settings.colorA_G, this.settings.colorA_B);
-            this.sphereMaterial.uniforms.colorB.value.setRGB(this.settings.colorB_R, this.settings.colorB_G, this.settings.colorB_B);
-            this.sphereMaterial.uniforms.colorBrightnessScale.value = this.settings.colorBrightnessScale;
-            this.sphereMaterial.uniforms.audioColorBrightnessScale.value = this.settings.audioColorBrightnessScale;
-        }
-        // --- END NEW UNIFORM UPDATES ---
+        this.sphereMaterial.uniforms.sphereNoiseStrength.value = this.settings.sphereNoiseStrength;
+        this.sphereMaterial.uniforms.sphereNoiseSpeed.value = this.settings.sphereNoiseSpeed;
 
         const sphereRotSpeed = this.settings.sphereRotationSpeed * deltaTime;
-        if (this.sphere) { // Ensure sphere exists
-            this.sphere.rotation.x += sphereRotSpeed * 0.3; 
-            this.sphere.rotation.y += sphereRotSpeed * 0.5;
-            this.sphere.rotation.z += sphereRotSpeed * 0.2;
-            this.sphereMaterial.uniforms.time.value += deltaTime * (1.0 + (audioData ? audioData.volume * 2.0 : 0.0)); 
-        }
-
+        this.sphere.rotation.x += sphereRotSpeed * 0.3; 
+        this.sphere.rotation.y += sphereRotSpeed * 0.5;
+        this.sphere.rotation.z += sphereRotSpeed * 0.2;
+        this.sphereMaterial.uniforms.time.value += deltaTime * (1.0 + (audioData ? audioData.volume * 2.0 : 0.0)); 
 
         if (this.particleSystem) {
             this.particleSystem.rotation.y += this.settings.rotationSpeed * deltaTime * 0.3;
             this.particleSystem.material.uniforms.time.value += deltaTime;
             this.particleSystem.material.uniforms.globalParticleScale.value = this.settings.particleSize;
+
+            // Particle lifespan logic
+            const positions = this.particleSystem.geometry.attributes.position.array;
+            const colors = this.particleSystem.geometry.attributes.color.array;
+            const baseSizes = this.particleSystem.geometry.attributes.baseSize.array;
+            const randomFactors = this.particleSystem.geometry.attributes.randomFactor.array;
+            const life = this.particleSystem.geometry.attributes.life.array;
+            const maxLife = this.particleSystem.geometry.attributes.maxLife.array;
+            let needsRespawnUpdate = false;
+
+            for (let i = 0; i < this.settings.particleCount; i++) {
+                life[i] -= deltaTime;
+                if (life[i] <= 0) {
+                    this.resetParticle(i, positions, colors, baseSizes, randomFactors, life, maxLife);
+                    needsRespawnUpdate = true;
+                }
+            }
+            this.particleSystem.geometry.attributes.life.needsUpdate = true; // Always update life
+            if (needsRespawnUpdate) { // Only update these if a particle actually respawned
+                this.particleSystem.geometry.attributes.position.needsUpdate = true;
+                this.particleSystem.geometry.attributes.color.needsUpdate = true;
+                this.particleSystem.geometry.attributes.baseSize.needsUpdate = true;
+                this.particleSystem.geometry.attributes.randomFactor.needsUpdate = true;
+                this.particleSystem.geometry.attributes.maxLife.needsUpdate = true;
+            }
         }
         
         this.bloomPass.radius = this.settings.bloomRadius;
@@ -466,41 +476,39 @@ export class Visualizer {
         this.isAudioActive = !!audioData;
 
         if (audioData) {
-            // Update existing audio uniforms for sphere (still used by current old shader)
-            if (this.sphereMaterial) {
-                this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, audioData.frequencies.bass, 0.2);
-                this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, audioData.frequencies.lowMid, 0.2);
-                this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, audioData.frequencies.mid, 0.2);
-                this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, audioData.frequencies.highMid, 0.2);
-                this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, audioData.frequencies.treble, 0.2);
-                this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, audioData.volume, 0.2);
-            }
-
+            // ... (Audio uniform updates for sphere and particles unchanged) ...
+            this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, audioData.frequencies.bass, 0.2);
+            this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, audioData.frequencies.lowMid, 0.2);
+            this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, audioData.frequencies.mid, 0.2);
+            this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, audioData.frequencies.highMid, 0.2);
+            this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, audioData.frequencies.treble, 0.2);
+            this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, audioData.volume, 0.2);
 
             if (this.particleSystem) {
                 this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, audioData.volume, 0.1);
                 this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, audioData.frequencies.mid, 0.1);
 
-                const colors = this.particleSystem.geometry.attributes.color.array;
+                const particleColors = this.particleSystem.geometry.attributes.color.array; // Use a different var name
                 for (let i = 0; i < this.settings.particleCount; i++) {
                     const i3 = i * 3;
-                    colors[i3] = THREE.MathUtils.lerp(colors[i3], 0.2 + audioData.frequencies.bass * 0.5, 0.1); 
-                    colors[i3 + 1] = THREE.MathUtils.lerp(colors[i3 + 1], 0.2 + audioData.frequencies.mid * 0.5, 0.1);
-                    colors[i3 + 2] = THREE.MathUtils.lerp(colors[i3 + 2], 0.2 + audioData.frequencies.treble * 0.5, 0.1);
+                    particleColors[i3] = THREE.MathUtils.lerp(particleColors[i3], 0.2 + audioData.frequencies.bass * 0.5, 0.1); 
+                    particleColors[i3 + 1] = THREE.MathUtils.lerp(particleColors[i3 + 1], 0.2 + audioData.frequencies.mid * 0.5, 0.1);
+                    particleColors[i3 + 2] = THREE.MathUtils.lerp(particleColors[i3 + 2], 0.2 + audioData.frequencies.treble * 0.5, 0.1);
                 }
-                this.particleSystem.geometry.attributes.color.needsUpdate = true;
+                // color.needsUpdate is set if needsRespawnUpdate is true, or if audio is active here
+                if (!this.particleSystem.geometry.attributes.color.needsUpdate) { // Avoid double-setting
+                     this.particleSystem.geometry.attributes.color.needsUpdate = true;
+                }
             }
             currentBloomStrength += audioData.volume * this.settings.audioBloomFactor;
         } else {
-            // Smoothly dampen audio uniforms when no audio
-            if (this.sphereMaterial) {
-                this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, 0, 0.1);
-                this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, 0, 0.1);
-                this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, 0, 0.1);
-                this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, 0, 0.1);
-                this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, 0, 0.1);
-                this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, 0, 0.1);
-            }
+            // ... (Dampening audio uniforms when no audio - unchanged) ...
+            this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, 0, 0.1);
+            this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, 0, 0.1);
+            this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, 0, 0.1);
+            this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, 0, 0.1);
+            this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, 0, 0.1);
+            this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, 0, 0.1);
 
             if (this.particleSystem) {
                 this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, 0, 0.05);
