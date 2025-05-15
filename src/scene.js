@@ -8,18 +8,16 @@ import * as dat from 'dat.gui';
 
 export class Visualizer {
     constructor(canvas) {
-        console.log("Visualizer: constructor called with canvas:", canvas); // Added for debugging
+        console.log("Visualizer: constructor called with canvas:", canvas);
         this.canvas = canvas;
         this.isAudioActive = false;
 
         if (!this.canvas) {
-            console.error("Visualizer Constructor: Canvas element is null or undefined!");
-            // Potentially throw an error or handle this gracefully
-            // For now, we'll let it proceed and other parts might fail.
+            console.error("Visualizer Constructor: Canvas element is null or undefined! App may not function.");
         }
 
         this.setupStats();
-        this.setupSettingsAndGUI();
+        this.setupSettingsAndGUI(); // Apply new defaults here
         this.setupRendererAndScene();
         this.createSceneObjects();
         this.addPostProcessing();
@@ -30,7 +28,6 @@ export class Visualizer {
     setupStats() {
         console.log("Visualizer: setupStats");
         this.stats = new Stats();
-        // Check if stats.dom is already appended to prevent duplicates if constructor is called multiple times (should not happen)
         if (!document.body.contains(this.stats.dom)) {
             document.body.appendChild(this.stats.dom);
         }
@@ -39,35 +36,37 @@ export class Visualizer {
     setupSettingsAndGUI() {
         console.log("Visualizer: setupSettingsAndGUI");
         this.settings = {
-            particleCount: 10000,
-            particleSize: 2,
-            rotationSpeed: 0.2,
-            sphereRotationSpeed: 0.3,
-            bloomStrength: 1.0,
-            bloomRadius: 0.4,
-            bloomThreshold: 0.85,
-            audioBloomFactor: 1.5
+            particleCount: 6000,
+            particleSize: 0.8,
+            rotationSpeed: 0.1,
+            sphereRotationSpeed: 0.15,
+            // Refined Bloom Defaults
+            bloomStrength: 0.8,       // Lower base strength
+            bloomRadius: 0.7,         // Softer radius
+            bloomThreshold: 0.8,      // Catches bright areas, but not everything
+            audioBloomFactor: 1.2     // Reduced audio's direct impact
         };
 
-        // Check if a GUI instance already exists for this visualizer to prevent duplicates
-        // This is a simple check; more robust solutions might involve a singleton GUI manager
         if (this.gui) {
             console.warn("Visualizer: GUI might already exist. Attempting to destroy old one.");
-            try {
-                this.gui.destroy();
-            } catch(e) { /* ignore*/ }
+            try { this.gui.destroy(); } catch(e) { /* ignore */ }
         }
         this.gui = new dat.GUI();
-        this.gui.add(this.settings, 'particleCount', 1000, 50000, 1000).onChange(() => this.recreateParticles());
-        this.gui.add(this.settings, 'particleSize', 0.1, 5).name('Base Particle Size');
-        this.gui.add(this.settings, 'rotationSpeed', 0, 1).name('Particle System Speed');
-        this.gui.add(this.settings, 'sphereRotationSpeed', 0, 1).name('Sphere Speed');
-        
+
+        const particleFolder = this.gui.addFolder('Particles');
+        particleFolder.add(this.settings, 'particleCount', 1000, 50000, 1000).name('Count').onChange(() => this.recreateParticles());
+        particleFolder.add(this.settings, 'particleSize', 0.1, 5).name('Global Scale');
+        particleFolder.add(this.settings, 'rotationSpeed', 0, 1).name('System Speed');
+
+        const sphereFolder = this.gui.addFolder('Sphere');
+        sphereFolder.add(this.settings, 'sphereRotationSpeed', 0, 1).name('Rotation Speed');
+
         const bloomFolder = this.gui.addFolder('Bloom');
-        bloomFolder.add(this.settings, 'bloomStrength', 0, 3).name('Base Strength');
-        bloomFolder.add(this.settings, 'bloomRadius', 0, 1);
-        bloomFolder.add(this.settings, 'bloomThreshold', 0, 1);
-        bloomFolder.add(this.settings, 'audioBloomFactor', 0, 5).name('Audio Boost Factor');
+        bloomFolder.add(this.settings, 'bloomStrength', 0, 5).name('Base Strength');
+        bloomFolder.add(this.settings, 'bloomRadius', 0, 2).name('Radius');
+        bloomFolder.add(this.settings, 'bloomThreshold', 0, 1).name('Threshold');
+        bloomFolder.add(this.settings, 'audioBloomFactor', 0, 5).name('Audio Boost');
+        bloomFolder.open();
     }
 
     setupRendererAndScene() {
@@ -79,19 +78,26 @@ export class Visualizer {
         });
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setClearColor(0x000000); // Black background
 
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.z = 5;
 
-        this.controls = new OrbitControls(this.camera, this.renderer.domElement); // Use renderer.domElement if canvas is directly passed
+        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000); // Slightly less FOV
+        this.camera.position.z = 8; // Slightly further back
+        this.camera.lookAt(this.scene.position);
+        console.log("Camera position:", this.camera.position.toArray().join(', '));
+
+
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
+        this.controls.minDistance = 2;
+        this.controls.maxDistance = 50;
     }
 
     createSceneObjects() {
         console.log("Visualizer: createSceneObjects");
-        const sphereGeometry = new THREE.IcosahedronGeometry(1, 6);
+        const sphereGeometry = new THREE.IcosahedronGeometry(1.5, 7);
         this.sphereMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 time: { value: 0 },
@@ -108,12 +114,14 @@ export class Visualizer {
                 varying vec3 vViewNormal;
                 
                 uniform float bass;
+                uniform float mid; 
                 uniform float time;
 
                 void main() {
                     vWorldPosition = position;
                     
-                    float displacement = bass * 0.4 * sin(position.y * 10.0 + time * 2.0 + position.x * 5.0);
+                    float displacement = bass * 0.5 * sin(position.y * 10.0 + time * 2.5 + position.x * 5.0);
+                    displacement += mid * 0.2 * cos(position.x * 8.0 - time * 1.5 + position.z * 6.0);
                     vec3 newPosition = position + normal * displacement;
                     
                     vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
@@ -129,29 +137,42 @@ export class Visualizer {
                 varying vec3 vViewNormal;
 
                 uniform float bass;
-                uniform float lowMid;
+                uniform float lowMid; 
                 uniform float mid;
-                uniform float highMid;
+                uniform float highMid; 
                 uniform float treble;
                 uniform float volume;
                 uniform float time;
                 
+                float mySmoothstep(float edge0, float edge1, float x) {
+                    float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+                    return t * t * (3.0 - 2.0 * t);
+                }
+
                 void main() {
-                    vec3 baseColor = vec3(
-                        0.5 + bass * 0.5,
-                        0.3 + mid * 0.7,
-                        0.4 + treble * 0.6
-                    );
-                    
-                    float pulse = sin(time * 5.0 + vWorldPosition.y * 10.0) * volume * 0.5;
-                    pulse = (pulse + 1.0) / 2.0;
-                    vec3 color = mix(baseColor, vec3(1.0, 1.0, 1.0), pulse * 0.3);
+                    vec3 baseColor = vec3(0.02, 0.02, 0.04); 
 
-                    float fresnelDot = dot(normalize(vViewNormal), normalize(vViewPosition));
-                    float fresnel = pow(0.3 + abs(fresnelDot), 2.5);
-
-                    color = mix(color, color * 1.5, fresnel * (0.5 + volume * 0.5));
+                    // Slightly toned down contributions for less aggressive self-illumination
+                    vec3 bassColorContribution = vec3(0.7, 0.08, 0.08) * mySmoothstep(0.2, 0.9, bass); 
+                    vec3 midColorContribution = vec3(0.08, 0.6, 0.15) * mySmoothstep(0.15, 0.8, mid);
+                    vec3 trebleColorContribution = vec3(0.15, 0.2, 0.7) * mySmoothstep(0.2, 0.7, treble);
                     
+                    vec3 audioColor = bassColorContribution + midColorContribution + trebleColorContribution;
+
+                    vec3 color = baseColor + audioColor;
+                    
+                    float pulseStrength = (1.0 + sin(time * 5.0 + vWorldPosition.y * 4.0)) * 0.5; 
+                    pulseStrength *= (volume * volume * 0.6); // Reduced pulse impact slightly
+
+                    color += vec3(0.25, 0.2, 0.15) * pulseStrength; // Warmer, slightly less intense pulse color
+                    
+                    float fresnelDot = abs(dot(normalize(vViewNormal), normalize(vViewPosition)));
+                    float fresnelEffect = pow(1.0 - fresnelDot, 3.5); 
+
+                    color += vec3(0.5, 0.6, 0.7) * fresnelEffect * (0.15 + volume * 0.5); // Reduced fresnel impact
+
+                    color = clamp(color, 0.0, 1.2); // Clamp a bit lower to manage brightness before bloom
+
                     gl_FragColor = vec4(color, 1.0);
                 }
             `
@@ -159,7 +180,12 @@ export class Visualizer {
 
         this.sphere = new THREE.Mesh(sphereGeometry, this.sphereMaterial);
         this.scene.add(this.sphere);
-        console.log("Visualizer: Sphere created and added to scene");
+        this.sphere.updateMatrixWorld(true);
+        const sphereWorldPos = new THREE.Vector3();
+        this.sphere.getWorldPosition(sphereWorldPos);
+        console.log("Sphere added to scene. Calculated world position:", sphereWorldPos.toArray().join(', '));
+        console.log("Sphere visible:", this.sphere.visible);
+
 
         this.createParticles();
     }
@@ -180,30 +206,33 @@ export class Visualizer {
         const particles = new THREE.BufferGeometry();
         const positions = new Float32Array(this.settings.particleCount * 3);
         const colors = new Float32Array(this.settings.particleCount * 3);
-        const sizes = new Float32Array(this.settings.particleCount); // These are base size factors
-        const randomFactors = new Float32Array(this.settings.particleCount);
+        const baseSizes = new Float32Array(this.settings.particleCount); 
+        const randomFactors = new Float32Array(this.settings.particleCount); 
+
+        const particleOuterRadius = 15; 
+        const particleInnerRadius = 2.5; 
 
         for (let i = 0; i < this.settings.particleCount; i++) {
             const i3 = i * 3;
-            const radius = 3 + Math.random() * 4;
+            const radius = particleInnerRadius + Math.random() * (particleOuterRadius - particleInnerRadius);
             const theta = Math.random() * 2 * Math.PI;
-            const phi = Math.acos(Math.random() * 2 - 1);
+            const phi = Math.acos((Math.random() * 2) - 1); 
 
             positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
             positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
             positions[i3 + 2] = radius * Math.cos(phi);
 
-            colors[i3] = 0.5 + Math.random() * 0.5;
-            colors[i3 + 1] = 0.5 + Math.random() * 0.5;
-            colors[i3 + 2] = 0.5 + Math.random() * 0.5;
+            colors[i3] = 0.6 + Math.random() * 0.4; 
+            colors[i3 + 1] = 0.6 + Math.random() * 0.4;
+            colors[i3 + 2] = 0.6 + Math.random() * 0.4;
 
-            sizes[i] = (0.5 + Math.random() * 0.5); // Store base random size factor
-            randomFactors[i] = (Math.random() - 0.5) * 2.0;
+            baseSizes[i] = 0.5 + Math.random() * 1.0; 
+            randomFactors[i] = Math.random(); 
         }
 
         particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        particles.setAttribute('size', new THREE.BufferAttribute(sizes, 1)); // These are base sizes
+        particles.setAttribute('baseSize', new THREE.BufferAttribute(baseSizes, 1)); 
         particles.setAttribute('randomFactor', new THREE.BufferAttribute(randomFactors, 1));
 
 
@@ -211,53 +240,63 @@ export class Visualizer {
             uniforms: {
                 time: { value: 0 },
                 pointTexture: { value: this.generateParticleTexture() },
-                globalParticleSize: { value: this.settings.particleSize } // Global scale from GUI
-                // Add audio uniforms here if you want shader to react directly
+                globalParticleScale: { value: this.settings.particleSize }, 
+                audioVolume: { value: 0.0 }, 
+                audioMid: { value: 0.0 }      
             },
             vertexShader: `
-                attribute float size; // This is the base random size factor per particle
+                attribute float baseSize; 
                 attribute vec3 color;
                 attribute float randomFactor;
 
                 varying vec3 vColor;
-                varying float vRandomFactor;
+                varying float vAlphaRandom;
 
                 uniform float time;
-                uniform float globalParticleSize; // From GUI
+                uniform float globalParticleScale; 
+                uniform float audioVolume;
+                uniform float audioMid;
                 
                 void main() {
                     vColor = color;
-                    vRandomFactor = randomFactor;
+                    vAlphaRandom = 0.5 + randomFactor * 0.5; 
 
                     vec3 pos = position;
                     
-                    float angle = time * 0.1 * (1.0 + randomFactor * 0.5);
-                    float s = sin(angle);
-                    float c = cos(angle);
+                    float angle = time * 0.05 * (1.0 + randomFactor * 0.8); 
+                    float s = sin(angle + randomFactor * 6.28); 
+                    float c = cos(angle + randomFactor * 6.28);
                     mat2 rotXZ = mat2(c, -s, s, c);
-                    
                     pos.xz = rotXZ * pos.xz;
+                    pos.xy = rotXZ * pos.xy; 
+
+                    pos.y += sin(time * 0.2 + randomFactor * 10.0) * 0.3 * (1.0 + audioMid * 2.0);
+
 
                     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                    // Final point size = (base random size) * (GUI global size) * (perspective scaling)
-                    gl_PointSize = size * globalParticleSize * (80.0 / -mvPosition.z);
+                    
+                    // Reduced audio impact on particle size
+                    float audioSizeFactor = 1.0 + audioVolume * 0.8 + audioMid * 1.2; 
+                    gl_PointSize = baseSize * globalParticleScale * audioSizeFactor * (100.0 / -mvPosition.z); 
+                    
                     gl_Position = projectionMatrix * mvPosition;
                 }
             `,
             fragmentShader: `
                 uniform sampler2D pointTexture;
                 varying vec3 vColor;
-                varying float vRandomFactor;
+                varying float vAlphaRandom; 
                 
                 void main() {
                     vec4 texColor = texture2D(pointTexture, gl_PointCoord);
-                    float alpha = texColor.a * (0.7 + vRandomFactor * 0.3); // Modulate alpha slightly
+                    float alpha = texColor.a * vAlphaRandom; 
+                    if (alpha < 0.01) discard; 
                     gl_FragColor = vec4(vColor * texColor.rgb, alpha);
                 }
             `,
             transparent: true,
             blending: THREE.AdditiveBlending,
-            depthWrite: false
+            depthWrite: false 
         });
 
         this.particleSystem = new THREE.Points(particles, particleMaterial);
@@ -266,23 +305,23 @@ export class Visualizer {
     }
 
     generateParticleTexture() {
-        // console.log("Visualizer: generateParticleTexture"); // Can be noisy
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
+        canvas.width = 128; 
+        canvas.height = 128;
         const ctx = canvas.getContext('2d');
+        const center = canvas.width / 2;
 
-        const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-        gradient.addColorStop(0, 'rgba(255,255,255,1)');
-        gradient.addColorStop(0.2, 'rgba(255,255,255,0.9)');
-        gradient.addColorStop(0.5, 'rgba(255,255,255,0.5)');
-        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+        gradient.addColorStop(0,    'rgba(255,255,255,1)');
+        gradient.addColorStop(0.15, 'rgba(255,255,255,0.95)'); 
+        gradient.addColorStop(0.4,  'rgba(255,255,255,0.6)');
+        gradient.addColorStop(0.8,  'rgba(255,255,255,0.1)');
+        gradient.addColorStop(1,    'rgba(255,255,255,0)');
 
         ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        return texture;
+        return new THREE.CanvasTexture(canvas);
     }
 
     addPostProcessing() {
@@ -292,9 +331,9 @@ export class Visualizer {
 
         this.bloomPass = new UnrealBloomPass(
             new THREE.Vector2(window.innerWidth, window.innerHeight),
-            this.settings.bloomStrength,
-            this.settings.bloomRadius,
-            this.settings.bloomThreshold
+            this.settings.bloomStrength, // Uses new default from settings
+            this.settings.bloomRadius,   // Uses new default
+            this.settings.bloomThreshold // Uses new default
         );
         this.composer.addPass(this.bloomPass);
     }
@@ -302,92 +341,85 @@ export class Visualizer {
     addEventListeners() {
         console.log("Visualizer: addEventListeners");
         window.addEventListener('resize', () => {
-            // console.log("Visualizer: resize event"); // Can be noisy
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.composer.setSize(window.innerWidth, window.innerHeight);
+            console.log("Visualizer: Resized");
         });
     }
 
     animateScene(deltaTime, audioData) {
-        // console.log("Visualizer: animateScene called"); // Very noisy, use with caution
         this.stats.begin();
-        this.controls.update();
+        this.controls.update(); 
 
         const sphereRotSpeed = this.settings.sphereRotationSpeed * deltaTime;
-        this.sphere.rotation.x += sphereRotSpeed * 0.5;
-        this.sphere.rotation.y += sphereRotSpeed;
-
-        this.sphereMaterial.uniforms.time.value += deltaTime;
+        this.sphere.rotation.x += sphereRotSpeed * 0.3; 
+        this.sphere.rotation.y += sphereRotSpeed * 0.5;
+        this.sphere.rotation.z += sphereRotSpeed * 0.2;
+        this.sphereMaterial.uniforms.time.value += deltaTime * (1.0 + (audioData ? audioData.volume * 2.0 : 0.0)); 
 
         if (this.particleSystem) {
-            this.particleSystem.rotation.y += this.settings.rotationSpeed * deltaTime * 0.5;
+            this.particleSystem.rotation.y += this.settings.rotationSpeed * deltaTime * 0.3;
             this.particleSystem.material.uniforms.time.value += deltaTime;
-            // Update global particle size from GUI settings
-            this.particleSystem.material.uniforms.globalParticleSize.value = this.settings.particleSize;
+            this.particleSystem.material.uniforms.globalParticleScale.value = this.settings.particleSize;
         }
         
         this.bloomPass.radius = this.settings.bloomRadius;
         this.bloomPass.threshold = this.settings.bloomThreshold;
-        let currentBloomStrength = this.settings.bloomStrength;
+        let currentBloomStrength = this.settings.bloomStrength; 
 
         this.isAudioActive = !!audioData;
 
         if (audioData) {
-            this.sphereMaterial.uniforms.bass.value = audioData.frequencies.bass;
-            this.sphereMaterial.uniforms.lowMid.value = audioData.frequencies.lowMid;
-            this.sphereMaterial.uniforms.mid.value = audioData.frequencies.mid;
-            this.sphereMaterial.uniforms.highMid.value = audioData.frequencies.highMid;
-            this.sphereMaterial.uniforms.treble.value = audioData.frequencies.treble;
-            this.sphereMaterial.uniforms.volume.value = audioData.volume;
+            this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, audioData.frequencies.bass, 0.2);
+            this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, audioData.frequencies.lowMid, 0.2);
+            this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, audioData.frequencies.mid, 0.2);
+            this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, audioData.frequencies.highMid, 0.2);
+            this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, audioData.frequencies.treble, 0.2);
+            this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, audioData.volume, 0.2);
+
 
             if (this.particleSystem) {
-                const colors = this.particleSystem.geometry.attributes.color.array;
-                // const sizes = this.particleSystem.geometry.attributes.size.array; // The 'size' attribute stores base random sizes
+                this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, audioData.volume, 0.1);
+                this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, audioData.frequencies.mid, 0.1);
 
+                const colors = this.particleSystem.geometry.attributes.color.array;
                 for (let i = 0; i < this.settings.particleCount; i++) {
                     const i3 = i * 3;
-                    
-                    colors[i3] = 0.2 + audioData.frequencies.bass * 0.8;
-                    colors[i3 + 1] = 0.2 + audioData.frequencies.mid * 0.8;
-                    colors[i3 + 2] = 0.2 + audioData.frequencies.treble * 0.8;
-                    
-                    // Particle size is now primarily controlled by the 'size' attribute (base random size)
-                    // multiplied by the 'globalParticleSize' uniform (from GUI) in the shader.
-                    // If you want audio to *also* affect individual particle sizes beyond the global GUI control,
-                    // you'd either:
-                    // 1. Modify the 'size' attribute here (but this overwrites the base random size unless you store it separately).
-                    // 2. Pass audio data (e.g., `audioData.volume`) as a new uniform to the particle shader and modulate size there.
-                    // Option 2 is cleaner. For now, size is GUI controlled globally, with random base per particle.
+                    // Slightly reduced particle color intensity from audio
+                    colors[i3] = THREE.MathUtils.lerp(colors[i3], 0.2 + audioData.frequencies.bass * 0.5, 0.1); 
+                    colors[i3 + 1] = THREE.MathUtils.lerp(colors[i3 + 1], 0.2 + audioData.frequencies.mid * 0.5, 0.1);
+                    colors[i3 + 2] = THREE.MathUtils.lerp(colors[i3 + 2], 0.2 + audioData.frequencies.treble * 0.5, 0.1);
                 }
                 this.particleSystem.geometry.attributes.color.needsUpdate = true;
-                // this.particleSystem.geometry.attributes.size.needsUpdate = true; // Only if you modify sizes array here
             }
-            currentBloomStrength += audioData.volume * this.settings.audioBloomFactor;
+            currentBloomStrength += audioData.volume * this.settings.audioBloomFactor; // Uses new default
         } else {
-            // Optional: Reset particle colors when no audio
-            if (this.particleSystem && this.particleSystem.geometry.attributes.color.needsUpdate === false) { // Avoid constant updates
-                const colors = this.particleSystem.geometry.attributes.color.array;
-                 for (let i = 0; i < this.settings.particleCount; i++) {
-                    const i3 = i * 3;
-                    colors[i3] = 0.5 + Math.random() * 0.5; // Reset to initial random colors
-                    colors[i3 + 1] = 0.5 + Math.random() * 0.5;
-                    colors[i3 + 2] = 0.5 + Math.random() * 0.5;
-                }
-                this.particleSystem.geometry.attributes.color.needsUpdate = true;
+            // Smoothly dampen audio uniforms when no audio
+            this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, 0, 0.1);
+            this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, 0, 0.1);
+            this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, 0, 0.1);
+            this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, 0, 0.1);
+            this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, 0, 0.1);
+            this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, 0, 0.1);
+
+
+            if (this.particleSystem) {
+                this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, 0, 0.05);
+                this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, 0, 0.05);
             }
         }
         
         this.bloomPass.strength = currentBloomStrength;
 
-        this.composer.render();
+        this.composer.render(); 
         this.stats.end();
     }
 
     recreateParticles() {
-        console.log("Visualizer: recreateParticles called by GUI");
+        console.log("Visualizer: recreateParticles called by GUI change");
         this.createParticles();
     }
 }
-console.log("src/scene.js: Parsed and Visualizer class is exported."); // Top-level log
+console.log("src/scene.js: Parsed and Visualizer class is exported.");
