@@ -2,18 +2,19 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { FilmPass } from 'three/addons/postprocessing/FilmPass.js'; 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import Stats from 'stats.js';
 import * as dat from 'dat.gui';
 
-const LOCAL_STORAGE_KEY = 'visualizerPreset_v1'; // Added a version to key for future-proofing
+const LOCAL_STORAGE_KEY = 'visualizerPreset_v1'; 
 
 export class Visualizer {
     constructor(canvas) {
         console.log("Visualizer: constructor called with canvas:", canvas);
         this.canvas = canvas;
         this.isAudioActive = false;
-        this.initialSettings = {}; // To store a copy of the initial default settings
+        this.initialSettings = {}; 
 
         if (!this.canvas) {
             console.error("Visualizer Constructor: Canvas element is null or undefined! App may not function.");
@@ -22,12 +23,10 @@ export class Visualizer {
         this.setupStats();
         this.setupSettingsAndGUI(); 
         this.setupRendererAndScene();
-        this.createSceneObjects(); // This will use settings, potentially loaded ones
-        this.addPostProcessing();
+        this.createSceneObjects(); 
+        this.addPostProcessing(); 
         this.addEventListeners();
 
-        // Attempt to load a preset on startup AFTER GUI is initialized
-        // so GUI can reflect loaded values.
         this.loadPreset(); 
         console.log("Visualizer: constructor finished.");
     }
@@ -53,7 +52,11 @@ export class Visualizer {
             sphereNoiseStrength: 0.15,
             sphereNoiseSpeed: 0.3,
             particleMinLife: 2.0, 
-            particleMaxLife: 5.0
+            particleMaxLife: 5.0,
+            filmNoiseIntensity: 0.35,
+            filmScanlinesIntensity: 0.25,
+            filmScanlinesCount: 648,
+            filmGrayscale: false
         };
     }
 
@@ -62,7 +65,7 @@ export class Visualizer {
         this.initialSettings = this.defineDefaultSettings();
         this.settings = { ...this.initialSettings }; 
 
-        if (this.gui && typeof this.gui.destroy === 'function') { // Check if GUI exists and can be destroyed
+        if (this.gui && typeof this.gui.destroy === 'function') {
             console.warn("Visualizer: GUI might already exist. Attempting to destroy old one.");
             try { this.gui.destroy(); } catch(e) { console.error("Error destroying old GUI", e); }
         }
@@ -85,7 +88,6 @@ export class Visualizer {
         particleFolder.add(this.settings, 'rotationSpeed', 0, 1).name('System Speed');
         particleFolder.add(this.settings, 'particleMinLife', 0.5, 10.0).name('Min Lifespan (s)');
         particleFolder.add(this.settings, 'particleMaxLife', 1.0, 20.0).name('Max Lifespan (s)');
-        // particleFolder.open(); 
 
         const sphereFolder = this.gui.addFolder('Sphere');
         sphereFolder.add(this.settings, 'sphereRotationSpeed', 0, 1).name('Rotation Speed');
@@ -97,10 +99,16 @@ export class Visualizer {
         bloomFolder.add(this.settings, 'bloomRadius', 0, 2).name('Radius');
         bloomFolder.add(this.settings, 'bloomThreshold', 0, 1).name('Threshold');
         bloomFolder.add(this.settings, 'audioBloomFactor', 0, 5).name('Audio Boost');
-        // bloomFolder.open(); // Usually gets opened by presetFolder if it's the last one.
+        
+        const filmFolder = this.gui.addFolder('Film Effect');
+        filmFolder.add(this.settings, 'filmNoiseIntensity', 0, 1).name('Noise Intensity');
+        filmFolder.add(this.settings, 'filmScanlinesIntensity', 0, 1).name('Scanlines Intensity');
+        filmFolder.add(this.settings, 'filmScanlinesCount', 50, 2048, 1).name('Scanlines Count');
+        filmFolder.add(this.settings, 'filmGrayscale').name('Grayscale');
+        filmFolder.open(); 
     }
 
-    savePreset() {
+    savePreset() { 
         try {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.settings));
             console.log("Preset saved to localStorage:", this.settings);
@@ -110,16 +118,13 @@ export class Visualizer {
             alert("Error saving preset. LocalStorage might be full or disabled.");
         }
     }
-
-    loadPreset() {
+    loadPreset() { 
         try {
             const savedPresetJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
             if (savedPresetJSON) {
                 const loadedSettings = JSON.parse(savedPresetJSON);
                 console.log("Preset loaded from localStorage:", loadedSettings);
-
                 const currentParticleCount = this.settings.particleCount;
-
                 Object.keys(this.initialSettings).forEach(key => {
                     if (loadedSettings.hasOwnProperty(key)) {
                         this.settings[key] = loadedSettings[key];
@@ -127,19 +132,13 @@ export class Visualizer {
                         this.settings[key] = this.initialSettings[key]; 
                     }
                 });
-                
                 this.refreshGUI();
-                
                 if (this.settings.particleCount !== currentParticleCount) {
                     this.recreateParticles(); 
                 }
-                // Non-GUI related updates that depend on settings might need to be called here
-                // For example, if bloom pass parameters were not directly tied to settings object
-                // but were set once. However, our animateScene updates them.
                  alert("Preset Loaded!");
             } else {
                 console.log("No preset found in localStorage. Using current/default settings.");
-                // No alert here to avoid annoying pop-up on first load.
             }
         } catch (e) {
             console.error("Error loading preset from localStorage:", e);
@@ -147,24 +146,19 @@ export class Visualizer {
             this.resetToDefaults();
         }
     }
-
-    resetToDefaults() {
+    resetToDefaults() { 
         console.log("Resetting settings to defaults.");
         const currentParticleCount = this.settings.particleCount;
-        // Re-assign this.settings to a fresh copy of initialSettings
         Object.keys(this.initialSettings).forEach(key => {
             this.settings[key] = this.initialSettings[key];
         });
-        
         this.refreshGUI();
-        
         if (this.settings.particleCount !== currentParticleCount) {
             this.recreateParticles();
         }
         alert("Settings reset to defaults!");
     }
-
-    refreshGUI() {
+    refreshGUI() { 
         if (this.gui && this.gui.__controllers) {
             this.gui.__controllers.forEach(controller => {
                 if(typeof controller.updateDisplay === 'function') controller.updateDisplay();
@@ -181,9 +175,7 @@ export class Visualizer {
         }
         console.log("GUI refreshed.");
     }
-
-
-    setupRendererAndScene() {
+    setupRendererAndScene() { 
         console.log("Visualizer: setupRendererAndScene");
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
@@ -204,8 +196,7 @@ export class Visualizer {
         this.controls.minDistance = 2;
         this.controls.maxDistance = 50;
     }
-
-    createSceneObjects() {
+    createSceneObjects() { 
         console.log("Visualizer: createSceneObjects");
         const sphereGeometry = new THREE.IcosahedronGeometry(1.5, 15);
         this.sphereMaterial = new THREE.ShaderMaterial({
@@ -300,11 +291,9 @@ export class Visualizer {
         this.sphere.getWorldPosition(sphereWorldPos);
         console.log("Sphere added to scene. Calculated world position:", sphereWorldPos.toArray().join(', '));
         console.log("Sphere visible:", this.sphere.visible);
-
         this.createParticles();
     }
-
-    createParticles() {
+    createParticles() { 
         console.log("Visualizer: createParticles (re)called with lifespan logic");
         if (this.particleSystem) {
             console.log("Visualizer: Disposing old particle system");
@@ -400,8 +389,7 @@ export class Visualizer {
         this.scene.add(this.particleSystem);
         console.log("Visualizer: New particle system created and added with lifespan attributes.");
     }
-
-    resetParticle(index, positions, colors, baseSizes, randomFactors, life, maxLife) {
+    resetParticle(index, positions, colors, baseSizes, randomFactors, life, maxLife) { 
         const i3 = index * 3;
         const particleOuterRadius = 15; 
         const particleInnerRadius = 2.5; 
@@ -418,11 +406,10 @@ export class Visualizer {
         randomFactors[index] = Math.random(); 
         const lifeRange = this.settings.particleMaxLife - this.settings.particleMinLife;
         maxLife[index] = this.settings.particleMinLife + Math.random() * lifeRange;
-        if (maxLife[index] <=0.1) maxLife[index] = Math.max(0.1, this.settings.particleMinLife); // Ensure positive & reasonable min
+        if (maxLife[index] <=0.1) maxLife[index] = Math.max(0.1, this.settings.particleMinLife);
         life[index] = maxLife[index];
     }
-
-    generateParticleTexture() {
+    generateParticleTexture() { 
         const canvas = document.createElement('canvas');
         canvas.width = 128; 
         canvas.height = 128;
@@ -440,9 +427,10 @@ export class Visualizer {
     }
 
     addPostProcessing() {
-        console.log("Visualizer: addPostProcessing");
+        console.log("Visualizer: addPostProcessing with FilmPass");
         this.composer = new EffectComposer(this.renderer);
         this.composer.addPass(new RenderPass(this.scene, this.camera));
+
         this.bloomPass = new UnrealBloomPass(
             new THREE.Vector2(window.innerWidth, window.innerHeight),
             this.settings.bloomStrength, 
@@ -450,38 +438,71 @@ export class Visualizer {
             this.settings.bloomThreshold 
         );
         this.composer.addPass(this.bloomPass);
+
+        this.filmPass = new FilmPass(
+            this.settings.filmNoiseIntensity,
+            this.settings.filmScanlinesIntensity,
+            this.settings.filmScanlinesCount,
+            this.settings.filmGrayscale ? 1 : 0 
+        );
+        this.composer.addPass(this.filmPass);
     }
 
-    addEventListeners() {
+    addEventListeners() { 
         console.log("Visualizer: addEventListeners");
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            if (this.composer) { // Check if composer exists
+            if (this.composer) { 
                 this.composer.setSize(window.innerWidth, window.innerHeight);
             }
             console.log("Visualizer: Resized");
         });
     }
-
+    
     animateScene(deltaTime, audioData) {
         this.stats.begin();
         this.controls.update(); 
 
-        this.sphereMaterial.uniforms.sphereNoiseStrength.value = this.settings.sphereNoiseStrength;
-        this.sphereMaterial.uniforms.sphereNoiseSpeed.value = this.settings.sphereNoiseSpeed;
+        // Sphere Uniform Updates (with existence checks for robustness)
+        if (this.sphereMaterial && this.sphereMaterial.uniforms) {
+            if (this.sphereMaterial.uniforms.sphereNoiseStrength) {
+                this.sphereMaterial.uniforms.sphereNoiseStrength.value = this.settings.sphereNoiseStrength;
+            }
+            if (this.sphereMaterial.uniforms.sphereNoiseSpeed) {
+                this.sphereMaterial.uniforms.sphereNoiseSpeed.value = this.settings.sphereNoiseSpeed;
+            }
+        } else {
+            // This might indicate sphereMaterial wasn't initialized, log once if it happens
+            // console.error("animateScene: sphereMaterial or its uniforms are undefined during noise update.");
+        }
 
-        const sphereRotSpeed = this.settings.sphereRotationSpeed * deltaTime;
-        this.sphere.rotation.x += sphereRotSpeed * 0.3; 
-        this.sphere.rotation.y += sphereRotSpeed * 0.5;
-        this.sphere.rotation.z += sphereRotSpeed * 0.2;
-        this.sphereMaterial.uniforms.time.value += deltaTime * (1.0 + (audioData ? audioData.volume * 2.0 : 0.0)); 
+        // FilmPass Uniform Updates (using direct properties for clarity and correctness)
+        if (this.filmPass) { 
+            this.filmPass.noiseIntensity = this.settings.filmNoiseIntensity;
+            this.filmPass.scanlinesIntensity = this.settings.filmScanlinesIntensity;
+            this.filmPass.scanlinesCount = this.settings.filmScanlinesCount;
+            this.filmPass.grayscale = this.settings.filmGrayscale; 
+        }
 
-        if (this.particleSystem && this.particleSystem.geometry) { // Ensure particle system and geometry exist
+
+        // Sphere rotation and main time uniform
+        if (this.sphere && this.sphereMaterial && this.sphereMaterial.uniforms && this.sphereMaterial.uniforms.time) {
+            const sphereRotSpeed = this.settings.sphereRotationSpeed * deltaTime;
+            this.sphere.rotation.x += sphereRotSpeed * 0.3; 
+            this.sphere.rotation.y += sphereRotSpeed * 0.5;
+            this.sphere.rotation.z += sphereRotSpeed * 0.2;
+            this.sphereMaterial.uniforms.time.value += deltaTime * (1.0 + (audioData ? audioData.volume * 2.0 : 0.0)); 
+        }
+
+
+        if (this.particleSystem && this.particleSystem.geometry && this.particleSystem.material && this.particleSystem.material.uniforms) { 
             this.particleSystem.rotation.y += this.settings.rotationSpeed * deltaTime * 0.3;
-            this.particleSystem.material.uniforms.time.value += deltaTime;
-            this.particleSystem.material.uniforms.globalParticleScale.value = this.settings.particleSize;
+            if(this.particleSystem.material.uniforms.time) this.particleSystem.material.uniforms.time.value += deltaTime;
+            if(this.particleSystem.material.uniforms.globalParticleScale) {
+                 this.particleSystem.material.uniforms.globalParticleScale.value = this.settings.particleSize;
+            }
 
             const positions = this.particleSystem.geometry.attributes.position.array;
             const colors = this.particleSystem.geometry.attributes.color.array;
@@ -490,7 +511,6 @@ export class Visualizer {
             const life = this.particleSystem.geometry.attributes.life.array;
             const maxLife = this.particleSystem.geometry.attributes.maxLife.array;
             let needsRespawnUpdate = false;
-
             for (let i = 0; i < this.settings.particleCount; i++) {
                 life[i] -= deltaTime;
                 if (life[i] <= 0) {
@@ -501,33 +521,35 @@ export class Visualizer {
             this.particleSystem.geometry.attributes.life.needsUpdate = true;
             if (needsRespawnUpdate) {
                 this.particleSystem.geometry.attributes.position.needsUpdate = true;
-                this.particleSystem.geometry.attributes.color.needsUpdate = true; // Colors also reset on respawn
+                this.particleSystem.geometry.attributes.color.needsUpdate = true; 
                 this.particleSystem.geometry.attributes.baseSize.needsUpdate = true;
                 this.particleSystem.geometry.attributes.randomFactor.needsUpdate = true;
                 this.particleSystem.geometry.attributes.maxLife.needsUpdate = true;
             }
         }
         
-        this.bloomPass.radius = this.settings.bloomRadius;
-        this.bloomPass.threshold = this.settings.bloomThreshold;
+        if(this.bloomPass) { 
+            this.bloomPass.radius = this.settings.bloomRadius;
+            this.bloomPass.threshold = this.settings.bloomThreshold;
+        }
         let currentBloomStrength = this.settings.bloomStrength; 
 
         this.isAudioActive = !!audioData;
 
         if (audioData) {
-            this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, audioData.frequencies.bass, 0.2);
-            this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, audioData.frequencies.lowMid, 0.2);
-            this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, audioData.frequencies.mid, 0.2);
-            this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, audioData.frequencies.highMid, 0.2);
-            this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, audioData.frequencies.treble, 0.2);
-            this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, audioData.volume, 0.2);
+            if (this.sphereMaterial && this.sphereMaterial.uniforms) {
+                if(this.sphereMaterial.uniforms.bass) this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, audioData.frequencies.bass, 0.2);
+                if(this.sphereMaterial.uniforms.lowMid) this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, audioData.frequencies.lowMid, 0.2);
+                if(this.sphereMaterial.uniforms.mid) this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, audioData.frequencies.mid, 0.2);
+                if(this.sphereMaterial.uniforms.highMid) this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, audioData.frequencies.highMid, 0.2);
+                if(this.sphereMaterial.uniforms.treble) this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, audioData.frequencies.treble, 0.2);
+                if(this.sphereMaterial.uniforms.volume) this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, audioData.volume, 0.2);
+            }
 
-            if (this.particleSystem && this.particleSystem.geometry) { // Ensure particle system and geometry exist
-                this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, audioData.volume, 0.1);
-                this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, audioData.frequencies.mid, 0.1);
-
+            if (this.particleSystem && this.particleSystem.geometry && this.particleSystem.material.uniforms) { 
+                if(this.particleSystem.material.uniforms.audioVolume) this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, audioData.volume, 0.1);
+                if(this.particleSystem.material.uniforms.audioMid) this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, audioData.frequencies.mid, 0.1);
                 const particleColors = this.particleSystem.geometry.attributes.color.array;
-                // Only update particle colors if they weren't just reset by a respawn
                 if (!this.particleSystem.geometry.attributes.color.needsUpdate) { 
                     for (let i = 0; i < this.settings.particleCount; i++) {
                         const i3 = i * 3;
@@ -540,17 +562,17 @@ export class Visualizer {
             }
             currentBloomStrength += audioData.volume * this.settings.audioBloomFactor;
         } else {
-            this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, 0, 0.1);
-            this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, 0, 0.1);
-            this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, 0, 0.1);
-            this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, 0, 0.1);
-            this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, 0, 0.1);
-            this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, 0, 0.1);
-
-            if (this.particleSystem && this.particleSystem.geometry) {
-                this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, 0, 0.05);
-                this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, 0, 0.05);
-                 // Optionally fade particle colors back to their base when no audio
+             if (this.sphereMaterial && this.sphereMaterial.uniforms) {
+                if(this.sphereMaterial.uniforms.bass) this.sphereMaterial.uniforms.bass.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.bass.value, 0, 0.1);
+                if(this.sphereMaterial.uniforms.mid) this.sphereMaterial.uniforms.mid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.mid.value, 0, 0.1);
+                if(this.sphereMaterial.uniforms.lowMid) this.sphereMaterial.uniforms.lowMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.lowMid.value, 0, 0.1);
+                if(this.sphereMaterial.uniforms.highMid) this.sphereMaterial.uniforms.highMid.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.highMid.value, 0, 0.1);
+                if(this.sphereMaterial.uniforms.treble) this.sphereMaterial.uniforms.treble.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.treble.value, 0, 0.1);
+                if(this.sphereMaterial.uniforms.volume) this.sphereMaterial.uniforms.volume.value = THREE.MathUtils.lerp(this.sphereMaterial.uniforms.volume.value, 0, 0.1);
+            }
+            if (this.particleSystem && this.particleSystem.geometry && this.particleSystem.material.uniforms) {
+                if(this.particleSystem.material.uniforms.audioVolume) this.particleSystem.material.uniforms.audioVolume.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioVolume.value, 0, 0.05);
+                if(this.particleSystem.material.uniforms.audioMid) this.particleSystem.material.uniforms.audioMid.value = THREE.MathUtils.lerp(this.particleSystem.material.uniforms.audioMid.value, 0, 0.05);
                 if (!this.particleSystem.geometry.attributes.color.needsUpdate) {
                     const particleColors = this.particleSystem.geometry.attributes.color.array;
                     for (let i = 0; i < this.settings.particleCount; i++) {
@@ -564,9 +586,9 @@ export class Visualizer {
             }
         }
         
-        this.bloomPass.strength = currentBloomStrength;
+        if(this.bloomPass) this.bloomPass.strength = currentBloomStrength;
 
-        this.composer.render(); 
+        if(this.composer) this.composer.render(); 
         this.stats.end();
     }
 
